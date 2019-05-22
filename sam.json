@@ -1,0 +1,184 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Transform": "AWS::Serverless-2016-10-31",
+    "Description": "opolis-exchange",
+    "Parameters": {
+        "SecretNamespace": { "Type": "String", "Default": "opolis-exchange" },
+        "EnvBTCFee": { "Type": "String" },
+        "EnvBTCNetwork": { "Type": "String" },
+        "EnvBTCThreshold": { "Type": "String" },
+        "EnvDBHost": { "Type": "String" },
+        "EnvDBDatabase": { "Type": "String" },
+        "EnvETHThreshold": { "Type": "String" },
+        "EnvWyreAddressBTC": { "Type": "String" },
+        "EnvWyreAddressETH": { "Type": "String" },
+        "EnvWyreProd": { "Type": "String" }
+    },
+    "Outputs": {
+        "ApiHost": {
+            "Value": { "Fn::Sub": "${API}.execute-api.${AWS::Region}.amazonaws.com" }
+        },
+        "ApiEndpoint": {
+            "Value": { "Fn::Sub": "https://${API}.execute-api.${AWS::Region}.amazonaws.com/api" }
+        }
+    },
+    "Globals": {
+        "Function": {
+            "CodeUri": ".",
+            "Runtime": "nodejs8.10",
+            "MemorySize": 256,
+            "Timeout": 120
+        }
+    },
+    "Resources": {
+        "API": {
+            "Type": "AWS::Serverless::Api",
+            "Properties": {
+                "Name": { "Ref": "AWS::StackName" },
+                "StageName": "api",
+                "EndpointConfiguration": "REGIONAL"
+            }
+        },
+        "AdminFunction": {
+            "Type": "AWS::Serverless::Function",
+            "Properties": {
+                "Handler": "src/api/admin.handler",
+                "Environment": {
+                    "Variables": {
+                        "BTC_NETWORK": { "Ref": "EnvBTCNetwork" },
+                        "DB_HOST": { "Ref": "EnvDBHost" },
+                        "DB_USER": { "Fn::Sub": "{{resolve:secretsmanager:${SecretNamespace}:SecretString:DB_USER}}" },
+                        "DB_PASSWORD": { "Fn::Sub": "{{resolve:secretsmanager:${SecretNamespace}:SecretString:DB_PASSWORD}}" },
+                        "DB_DATABASE": { "Ref": "EnvDBDatabase" },
+                        "MNEMONIC": { "Fn::Sub": "{{resolve:secretsmanager:${SecretNamespace}:SecretString:MNEMONIC}}" }
+                    }
+                },
+                "Events": {
+                    "AddressRequest": {
+                        "Type": "Api",
+                        "Properties": {
+                            "RestApiId": { "Ref": "API" },
+                            "Path": "/admin/address/{coin+}",
+                            "Method": "post",
+                            "Auth": {
+                                "Authorizer": "AWS_IAM"
+                            }
+                        }
+                    },
+                    "PayerRequest": {
+                        "Type": "Api",
+                        "Properties": {
+                            "RestApiId": { "Ref": "API" },
+                            "Path": "/admin/payer",
+                            "Method": "post",
+                            "Auth": {
+                                "Authorizer": "AWS_IAM"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "ListenFunction": {
+            "Type": "AWS::Serverless::Function",
+            "Properties": {
+                "Handler": "src/api/listener.handler",
+                "Policies": "AmazonDynamoDBFullAccess",
+                "Environment": {
+                    "Variables": {
+                        "DYNAMODB_TABLE": { "Ref": "DynamoTable" }
+                    }
+                },
+                "Events": {
+                    "TransactionBTC": {
+                        "Type": "Api",
+                        "Properties": {
+                            "RestApiId": { "Ref": "API" },
+                            "Path": "/transaction/btc",
+                            "Method": "post"
+                        }
+                    },
+                    "TransactionETH": {
+                        "Type": "Api",
+                        "Properties": {
+                            "RestApiId": { "Ref": "API" },
+                            "Path": "/transaction/eth",
+                            "Method": "post"
+                        }
+                    }
+                }
+            }
+        },
+        "ProcessFunction": {
+            "Type": "AWS::Serverless::Function",
+            "Properties": {
+                "Handler": "src/api/processor.handler",
+                "Policies": "AmazonDynamoDBFullAccess",
+                "Environment": {
+                    "Variables": {
+                        "BLOCKCYPHER_TOKEN": { "Fn::Sub": "{{resolve:secretsmanager:${SecretNamespace}:SecretString:BLOCKCYPHER_TOKEN}}" },
+                        "BTC_FEE": { "Ref": "EnvBTCFee" },
+                        "BTC_NETWORK": { "Ref": "EnvBTCNetwork" },
+                        "BTC_THRESHOLD": { "Ref": "EnvBTCThreshold" },
+                        "DB_HOST": { "Ref": "EnvDBHost" },
+                        "DB_USER": { "Fn::Sub": "{{resolve:secretsmanager:${SecretNamespace}:SecretString:DB_USER}}" },
+                        "DB_PASSWORD": { "Fn::Sub": "{{resolve:secretsmanager:${SecretNamespace}:SecretString:DB_PASSWORD}}" },
+                        "DB_DATABASE": { "Ref": "EnvDBDatabase" },
+                        "ETH_THRESHOLD": { "Ref": "EnvETHThreshold" },
+                        "MNEMONIC": { "Fn::Sub": "{{resolve:secretsmanager:${SecretNamespace}:SecretString:MNEMONIC}}" },
+                        "WYRE_ADDRESS_BTC": { "Ref": "EnvWyreAddressBTC" },
+                        "WYRE_ADDRESS_ETH": { "Ref": "EnvWyreAddressETH" },
+                        "WYRE_ACCOUNT_ID": { "Fn::Sub": "{{resolve:secretsmanager:${SecretNamespace}:SecretString:WYRE_ACCOUNT_ID}}" },
+                        "WYRE_API_KEY": { "Fn::Sub": "{{resolve:secretsmanager:${SecretNamespace}:SecretString:WYRE_API_KEY}}" },
+                        "WYRE_SECRET_KEY": { "Fn::Sub": "{{resolve:secretsmanager:${SecretNamespace}:SecretString:WYRE_SECRET_KEY}}" },
+                        "WYRE_PROD": { "Ref": "EnvWyreProd" }
+                    }
+                },
+                "Events": {
+                    "Stream": {
+                        "Type": "DynamoDB",
+                        "Properties": {
+                            "Stream": { "Fn::GetAtt": [ "DynamoTable", "StreamArn" ] },
+                            "BatchSize": 1,
+                            "StartingPosition": "LATEST"
+                        }
+                    }
+                }
+            }
+        },
+        "DynamoTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "AttributeDefinitions": [
+                    { "AttributeName": "id", "AttributeType": "S" }
+                ],
+                "KeySchema": [
+                    { "AttributeName": "id", "KeyType": "HASH" }
+                ],
+                "ProvisionedThroughput":{
+                    "ReadCapacityUnits": 5,
+                    "WriteCapacityUnits": 5
+                },
+                "StreamSpecification": {
+                    "StreamViewType": "NEW_IMAGE"
+                }
+            }
+        },
+        "AdminGroup": {
+            "Type": "AWS::IAM::Group",
+            "Properties": {
+                "Policies": [{
+                    "PolicyName": { "Fn::Sub": "${AWS::StackName}-admin" },
+                    "PolicyDocument": {
+                        "Version": "2012-10-17",
+                        "Statement": [{
+                            "Effect": "Allow",
+                            "Action": "execute-api:Invoke",
+                            "Resource": { "Fn::Sub": "arn:aws:execute-api:us-west-2::${API}/api/*/*" }
+                        }]
+                    }
+                }]
+            }
+        }
+    }
+}

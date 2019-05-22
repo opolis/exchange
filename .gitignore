@@ -1,0 +1,14 @@
+.aws-sam
+.env
+.env.aws
+.env.json
+
+build
+event.json
+node_modules
+sam.package.yaml
+
+parameters
+*-scratchpad.*
+
+/tmp/

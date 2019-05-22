@@ -1,0 +1,35 @@
+{
+    "name": "opolis-exchange",
+    "private": true,
+    "version": "0.1.0",
+    "description": "automatically convert crypto to USD",
+    "scripts": {
+        "test": "jest"
+    },
+    "author": "opolis",
+    "dependencies": {
+        "@wyre/api": "^1.0.3",
+        "better-sqlite3": "^5.2.1",
+        "bip32": "^1.0.2",
+        "bip39": "^2.5.0",
+        "bitcoinjs-lib": "^4.0.2",
+        "blockcypher": "^0.2.0",
+        "ethereumjs-tx": "^1.3.7",
+        "ethereumjs-wallet": "^0.6.2",
+        "ethers": "^4.0.17",
+        "lossless-json": "^1.0.3",
+        "sync-mysql": "^3.0.1"
+    },
+    "devDependencies": {
+        "aws-signature-v4": "^1.3.0",
+        "get-stdin": "^6.0.0",
+        "jest": "^24.8.0",
+        "sleep": "^5.2.3"
+    },
+    "jest": {
+        "testPathIgnorePatterns": [
+            "<rootDir>/src/api/test.js",
+            "<rootDir>/.aws-sam/*"
+        ]
+    }
+}
