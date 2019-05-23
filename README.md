@@ -5,6 +5,8 @@ Automatically convert incoming bitcoin (BTC) and ethereum (ETH) to USD using Wyr
 
 Created at Opolis with :heart: in Colorado.
 
+![data flow diagram](./docs/diagram.png)
+
 ## Deployment
 
 **This deployment guide is still under review. Please let us know if you run into any issues or if something isn't
